@@ -33,27 +33,11 @@ def crawler_today():
     crawler_specific_day(date)
 
 
-def crawler_specific_day(date:date):
-     
-    url = f"http://www.dom.salvador.ba.gov.br/index.php?filterTitle=&filterDateFrom={date}&filterDateTo={date}&option=com_dmarticlesfilter&view=articles&Itemid=3&userSearch=1&limstart=0"
-    print(date)
-    if is_weekend(date):
-        return {
-            "status": "PDF not downloaded",
-            "message": f'{date} is on the weekend and the DOM will be available on the next day.'
-                }
-    elif is_holiday(date):
-        return {
-            "status": "PDF not downloaded",
-            "message": f'{date} is a holiday and the DOM will be available on the next day.'
-                }
-    
-    elif (is_monday(date) and not(is_holiday(date))):
-        saturday_date = date - timedelta(days=2)
-        data_extraction(url, saturday_date)     
+def crawler_specific_day(search_date:date):
+        url = f"http://www.dom.salvador.ba.gov.br/index.php?filterTitle=&filterDateFrom={search_date}&filterDateTo={search_date}&option=com_dmarticlesfilter&view=articles&Itemid=3&userSearch=1&limstart=0"
 
-    else:
-        data_extraction(url, date)
+        pdf_date = pdf_date_url(search_date)
+
     
 
 def crawler_interval(date_start:date, date_finish:date):
@@ -82,9 +66,8 @@ def crawler_interval(date_start:date, date_finish:date):
 
 def data_extraction_interval(result):
     try:
-        info = str(result)
+        info = result.text
     except:
-        print("Problem with the soup/holiday/no dom in the interval")
         return{
             "status": "PDF not downloaded",
             "message": "There is no DOM for this interval"
@@ -107,17 +90,15 @@ def data_extraction_interval(result):
         if ((is_monday(date)) and not(is_holiday(date))):
             saturday_date = date - timedelta(days=2)
             data_extraction(url, saturday_date)     
-        elif is_holiday(date):
-                        return {
-                    "status": "PDF not downloaded",
-                    "message": f'{date} is a holiday.'
-                }
+        elif is_holiday(date) and is_monday(date):
+            
+
+
         else:
             data_extraction(url, date)
         
 
-
-def data_extraction(url:str, date:date):
+def data_extraction(url:str, date:date, pdf_date:date:
     month_name = month_dict[str(date.month).zfill(2)]
     response = requests.get(url)
     soup = BeautifulSoup(response.text, "html.parser")
@@ -136,7 +117,7 @@ def data_extraction(url:str, date:date):
         dom_name_regex = re.compile('DOM+-+([0-9]*)')
         dom_name = dom_name_regex.search(info).group()
         dom_name = 'dom'+dom_name[dom_name.find("-")::]
-        to_search = {"_id": dom_name}
+        to_search = {"dom_info": dom_name}
         finding = db['salvador'].find_one(to_search)
         year = date.year
         day = str(date.day).zfill(2)
@@ -158,6 +139,7 @@ def data_extraction(url:str, date:date):
 
 
         else:
+            
             link = f'http://www.dom.salvador.ba.gov.br/images/stories/pdf/{year}/{month_name}/{dom_name}-{day}-{month}-{year}.pdf'
             print(link)
             response = requests.get(link)
@@ -192,21 +174,79 @@ def data_extraction(url:str, date:date):
 
 
 def is_monday(date: date):
-    date_weekday = date.weekday()
-    if(date_weekday==0):
-        return True
-    else:
-        return False   
+    return date.weekday() == 0
 
 def is_weekend(date:date):
-    date_weekday = date.weekday()
-    if(date_weekday==5)|(date_weekday==6):
-        return True
-    else:
-        return False
+    return date.weekday() == 6
 
 def is_holiday(date:date):
-    if date in holidays:
-        return True
-    else:
-        return False
+    return date in holidays
+
+
+def pdf_date_url(search_date: date):
+    weekday = search_date.weekday()
+
+    match weekday:
+        case 0:
+            if is_holiday(search_date):
+                pdf_date = search_date + timedelta(days=1)
+                return pdf_date
+            else:
+                if(is_holiday(search_date - timedelta(days=3))):
+                    pdf_date = search_date - timedelta(days=3)
+                    return pdf_date
+                else:
+                    pdf_date = search_date - timedelta(days=2)
+                    return pdf_date
+        
+        case 1:
+            if is_holiday(search_date):
+                pdf_date = search_date + timedelta(days=1)
+                return pdf_date
+            else:
+                if(is_holiday(search_date - timedelta(days=1))):
+                    pdf_date = search_date - timedelta(days=3)
+                    return pdf_date
+                else:
+                    pdf_date = search_date
+                    return pdf_date
+
+        case 2,3:
+            if is_holiday(search_date):
+                pdf_date = search_date + timedelta(days=1)
+                return pdf_date
+            else:
+                if(is_holiday(search_date - timedelta(days=1))):
+                    pdf_date = search_date - timedelta(days=1)
+                    return pdf_date
+                else:
+                    pdf_date = search_date
+                    return pdf_date
+
+        case 4:
+            if is_holiday(search_date):
+                pdf_date = search_date + timedelta(days=3)
+                return pdf_date
+            else:
+                if(is_holiday(search_date - timedelta(days=1))):
+                    pdf_date = search_date - timedelta(days=1)
+                    return pdf_date
+                else:
+                    pdf_date = search_date
+                    return pdf_date
+
+        case 5:
+                if(is_holiday(search_date - timedelta(days=1))):
+                    pdf_date = search_date - timedelta(days=1)
+                    return pdf_date
+                else:
+                    pdf_date = search_date
+                    return pdf_date
+                
+        case 6:
+                if(is_holiday(search_date - timedelta(days=2))):
+                    pdf_date = search_date - timedelta(days=2)
+                    return pdf_date
+                else:
+                    pdf_date = search_date - timedelta(days=1)
+                    return pdf_date            
