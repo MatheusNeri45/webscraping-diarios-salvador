@@ -5,9 +5,9 @@ app = FastAPI()
 url = "http://www.dom.salvador.ba.gov.br/"
 
 @app.get("/diaries/get_files")
-def read_dom():
-    read_one_file_dom_db()
-
+def read_dom(date: date):
+    response_body = read_one_file_dom_db(date.strftime("%d-%m-%Y"))
+    return response_body
 @app.get("/diaries/today_crawler")
 def get_today_diary():
     response_body = crawler_today()
