@@ -37,17 +37,24 @@ def crawler_specific_day(date:date):
      
     url = f"http://www.dom.salvador.ba.gov.br/index.php?filterTitle=&filterDateFrom={date}&filterDateTo={date}&option=com_dmarticlesfilter&view=articles&Itemid=3&userSearch=1&limstart=0"
     print(date)
-    if is_weekend(date)|is_holiday(date):
-        print("No diary, weekend or holiday.")
+    if is_weekend(date):
+        return {
+            "status": "PDF not downloaded",
+            "message": f'{date} is on the weekend and the DOM will be available on the next day.'
+                }
+    elif is_holiday(date):
+        return {
+            "status": "PDF not downloaded",
+            "message": f'{date} is a holiday and the DOM will be available on the next day.'
+                }
     
-    elif is_monday(date):
+    elif (is_monday(date) and not(is_holiday(date))):
         saturday_date = date - timedelta(days=2)
         data_extraction(url, saturday_date)     
 
     else:
         data_extraction(url, date)
     
-
 
 def crawler_interval(date_start:date, date_finish:date):
          
@@ -78,6 +85,10 @@ def data_extraction_interval(result):
         info = str(result)
     except:
         print("Problem with the soup/holiday/no dom in the interval")
+        return{
+            "status": "PDF not downloaded",
+            "message": "There is no DOM for this interval"
+        }
 
     else:
         dom_name_regex = re.compile('DOM+-+([0-9]*)')
@@ -93,9 +104,14 @@ def data_extraction_interval(result):
         dom_name = 'dom'+dom_name[dom_name.find("-")::]
         
         url = f"http://www.dom.salvador.ba.gov.br/index.php?filterTitle=&filterDateFrom={date}&filterDateTo={date}&option=com_dmarticlesfilter&view=articles&Itemid=3&userSearch=1&limstart=0"
-        if is_monday(date):
-            date = date-2
-            data_extraction(url, date)     
+        if ((is_monday(date)) and not(is_holiday(date))):
+            saturday_date = date - timedelta(days=2)
+            data_extraction(url, saturday_date)     
+        elif is_holiday(date):
+                        return {
+                    "status": "PDF not downloaded",
+                    "message": f'{date} is a holiday.'
+                }
         else:
             data_extraction(url, date)
         
@@ -103,7 +119,6 @@ def data_extraction_interval(result):
 
 def data_extraction(url:str, date:date):
     month_name = month_dict[str(date.month).zfill(2)]
-    #Criando a soup
     response = requests.get(url)
     soup = BeautifulSoup(response.text, "html.parser")
     print("Soup creation done!")
@@ -113,6 +128,10 @@ def data_extraction(url:str, date:date):
         info = str(tag[0])
     except:
         print("Soup problem")
+        return{
+            "status":"PDF not downloaded",
+            "message": "Internal error"
+        }
     else: 
         dom_name_regex = re.compile('DOM+-+([0-9]*)')
         dom_name = dom_name_regex.search(info).group()
@@ -126,14 +145,14 @@ def data_extraction(url:str, date:date):
         if finding and finding["status"] == "downloaded":
             print('DOM already exists in the DB')
             return {
-                    "status": "OK",
-                    "message": 'DOM already exists in the DB'
+                    "status": "PDF downloaded",
+                    "message": 'DOM already exists in the DB with full information'
                 }
 
         elif finding and finding["status"] == "error_downloading":
             print('The DOM was NOT inserted because it already exists and it is marked as an error DOM')
             return {
-                    "status": "ERROR DOM",
+                    "status": "PDF not downloaded",
                     "message": 'The DOM was NOT inserted because it already exists and it is marked as an error DOM'
                 }
 
@@ -146,21 +165,20 @@ def data_extraction(url:str, date:date):
             try:
                 pdf = PDF(pdf_bytes)
                 
-                
             except:
                 document = {
-                "_id": f"{dom_name}-{day}-{month}-{year}",
+                "dom_info": f"{dom_name}-{day}-{month}-{year}",
                 "status": "error_downloading",
                 }
                 insert_one_dom_db(document, flag="no_pdf")
                 return {
-                    "status": "OK",
-                    "message": "Data added to DB"
+                    "status": "PDF not downloaded",
+                    "message": "DOM added to DB with status marked as error_downloading"
                 }
 
             else:
                 document = {
-                    "_id": f"{dom_name}-{day}-{month}-{year}",
+                    "dom_info": f"{dom_name}-{day}-{month}-{year}",
                     "page_count": pdf.page_count,
                     "page_content": pdf.pages[1::],
                     "full_summary": pdf.summary,
@@ -168,8 +186,8 @@ def data_extraction(url:str, date:date):
                 }
                 insert_one_dom_db(document, flag="ok")
                 return {
-                    "status": "OK",
-                    "message": "Data added to DB"
+                    "status": "PDF downloaded",
+                    "message": "Data added to DB and DOM marked as Downloaded"
                 }
 
 
@@ -179,7 +197,6 @@ def is_monday(date: date):
         return True
     else:
         return False   
-
 
 def is_weekend(date:date):
     date_weekday = date.weekday()
