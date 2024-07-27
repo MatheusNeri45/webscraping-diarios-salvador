@@ -1,7 +1,6 @@
 from fastapi import FastAPI
 from .crawler import *
-from .crawler_latest_dom import crawler_latest_dom
-from .db_operations import read_one_file_dom_db, insert_one_dom_db
+from .db_operations import read_one_file_dom_db
 app = FastAPI()
 url = "http://www.dom.salvador.ba.gov.br/"
 
